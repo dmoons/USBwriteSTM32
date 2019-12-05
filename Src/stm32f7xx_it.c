@@ -64,6 +64,7 @@ extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim1;
+extern SemaphoreHandle_t transmitBufferSemaphore;
 
 /* USER CODE BEGIN EV */
 
@@ -173,11 +174,15 @@ void ADC_IRQHandler(void)
   /* USER CODE BEGIN ADC_IRQn 0 */
   HAL_GPIO_TogglePin(ADCSample_GPIO_Port, ADCSample_Pin);
   uint16_t value = (uint16_t) ( ((HAL_ADC_GetValue(&hadc1) &0x0FFF) << 2) & 0x3FFC ); // convert to 00 xx xx xx xx xx xx 00
-  if(currentPosition <= TRANSMIT_BUFFER_LENGTH - 4)
+  if(currentPosition <= TRANSMIT_BUFFER_LENGTH - 2)
   {
 	  *(currentBuffer + currentPosition) = (value>> 8) & 0xFF ; // high bits
 	  *(currentBuffer + currentPosition + 1) = value & 0xFF; // low bits
 	  currentPosition += 2;
+  }
+  else
+  {
+	  xSemaphoreGiveFromISR(transmitBufferSemaphore, NULL);
   }
   /* USER CODE END ADC_IRQn 0 */
   HAL_ADC_IRQHandler(&hadc1);
@@ -206,14 +211,14 @@ void TIM1_UP_TIM10_IRQHandler(void)
 void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
-	static unsigned int last_interrupt_time = 0;
-	unsigned int interrupt_time = xTaskGetTickCountFromISR();
-  BaseType_t bt = pdPASS;
-  if(interrupt_time - last_interrupt_time > 200)
-  {
-	  xSemaphoreGiveFromISR(buttonBinarySemph, &bt);
-  }
-  last_interrupt_time = interrupt_time;
+	static unsigned long last_interrupt_time = 0;
+	unsigned long interrupt_time = xTaskGetTickCountFromISR();
+	  BaseType_t bt = pdPASS;
+	  if(interrupt_time - last_interrupt_time > 200)
+	  {
+		  xSemaphoreGiveFromISR(buttonBinarySemph, &bt);
+	  }
+	  last_interrupt_time = interrupt_time;
   /* USER CODE END EXTI15_10_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
   /* USER CODE BEGIN EXTI15_10_IRQn 1 */
